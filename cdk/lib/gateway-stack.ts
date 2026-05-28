@@ -11,6 +11,8 @@ export interface AgentCoreGatewayStackProps extends cdk.StackProps {
   billingMcpRuntimeEndpoint: string;
   pricingMcpRuntimeArn: string;
   pricingMcpRuntimeEndpoint: string;
+  dataProcessingMcpRuntimeArn: string;
+  dataProcessingMcpRuntimeEndpoint: string;
   // AuthStack Cognito - used for OAuth provider (outbound auth to runtimes)
   authUserPoolId: string;
   authUserPoolArn: string;
@@ -287,6 +289,28 @@ def handler(event, context):
       },
     });
     pricingTarget.node.addDependency(gateway);
+
+    const dataProcessingTarget = new cdk.CfnResource(this, 'DataProcessingMcpTarget', {
+      type: 'AWS::BedrockAgentCore::GatewayTarget',
+      properties: {
+        GatewayIdentifier: gatewayId,
+        Name: 'dataProcessingMcp',
+        Description: 'AWS Labs Data Processing MCP Server (Athena/Glue) on AgentCore Runtime',
+        TargetConfiguration: {
+          Mcp: { McpServer: { Endpoint: props.dataProcessingMcpRuntimeEndpoint } },
+        },
+        CredentialProviderConfigurations: [{
+          CredentialProviderType: 'OAUTH',
+          CredentialProvider: {
+            OauthCredentialProvider: {
+              ProviderArn: oauthProviderArn,
+              Scopes: ['mcp-runtime-server/invoke'],
+            },
+          },
+        }],
+      },
+    });
+    dataProcessingTarget.node.addDependency(gateway);
 
     // ========================================
     // Outputs

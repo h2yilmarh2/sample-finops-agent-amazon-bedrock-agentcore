@@ -19,6 +19,7 @@ export declare class ImageStack extends cdk.Stack {
     readonly repository: ecr.Repository;
     readonly billingMcpRepository: ecr.Repository;
     readonly pricingMcpRepository: ecr.Repository;
+    readonly dataProcessingMcpRepository: ecr.Repository;
     readonly sourceBucket: s3.Bucket;
     constructor(scope: Construct, id: string, props?: cdk.StackProps);
     /**

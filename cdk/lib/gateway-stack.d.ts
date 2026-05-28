@@ -5,6 +5,8 @@ export interface AgentCoreGatewayStackProps extends cdk.StackProps {
     billingMcpRuntimeEndpoint: string;
     pricingMcpRuntimeArn: string;
     pricingMcpRuntimeEndpoint: string;
+    dataProcessingMcpRuntimeArn: string;
+    dataProcessingMcpRuntimeEndpoint: string;
     authUserPoolId: string;
     authUserPoolArn: string;
     authM2mClientId: string;

@@ -30,6 +30,24 @@ if (!adminEmail) {
   throw new Error('ADMIN_EMAIL environment variable is required. Set it before deploying.');
 }
 
+// Data Processing MCP configuration (required)
+const athenaDatabase = process.env.ATHENA_DATABASE || app.node.tryGetContext('athenaDatabase');
+const athenaTable = process.env.ATHENA_TABLE || app.node.tryGetContext('athenaTable');
+const athenaOutputBucket = process.env.ATHENA_OUTPUT_BUCKET || app.node.tryGetContext('athenaOutputBucket');
+const curS3Bucket = process.env.CUR_S3_BUCKET || app.node.tryGetContext('curS3Bucket');
+const curS3Prefix = process.env.CUR_S3_PREFIX || app.node.tryGetContext('curS3Prefix') || '';
+
+if (!athenaDatabase || !athenaTable || !athenaOutputBucket || !curS3Bucket) {
+  console.error('\n❌ ERROR: Data Processing MCP configuration is required.');
+  console.error('Please set the following environment variables before deploying:');
+  console.error('  export ATHENA_DATABASE="your-cur-database"');
+  console.error('  export ATHENA_TABLE="your-cur-table"');
+  console.error('  export ATHENA_OUTPUT_BUCKET="s3://your-athena-results-bucket"');
+  console.error('  export CUR_S3_BUCKET="your-cur-s3-bucket"');
+  console.error('  export CUR_S3_PREFIX="optional/prefix/"  (optional)\n');
+  throw new Error('ATHENA_DATABASE, ATHENA_TABLE, ATHENA_OUTPUT_BUCKET, and CUR_S3_BUCKET are required.');
+}
+
 // ========================================
 // Validated Deployment Sequence
 // ========================================
@@ -50,11 +68,17 @@ const authStack = new AuthStack(app, 'FinOpsAuthStack', {
 // Stack 3: MCP Runtime Stack - Deploy 2 MCP Runtimes with JWT auth
 const mcpRuntimeStack = new MCPRuntimeStack(app, 'FinOpsMCPRuntimeStack', {
   env,
-  description: 'FinOps Agent - MCP Server Runtimes (Billing + Pricing) with JWT Authorization',
+  description: 'FinOps Agent - MCP Server Runtimes (Billing + Pricing + Data Processing) with JWT Authorization',
   billingMcpRepository: imageStack.billingMcpRepository,
   pricingMcpRepository: imageStack.pricingMcpRepository,
+  dataProcessingMcpRepository: imageStack.dataProcessingMcpRepository,
   userPoolId: authStack.userPoolId,
   m2mClientId: authStack.oauthClientId,
+  athenaDatabase,
+  athenaTable,
+  athenaOutputBucket,
+  curS3Bucket,
+  curS3Prefix,
 });
 mcpRuntimeStack.addDependency(imageStack);
 mcpRuntimeStack.addDependency(authStack);
@@ -67,6 +91,8 @@ const agentCoreGatewayStack = new AgentCoreGatewayStack(app, 'FinOpsAgentCoreGat
   pricingMcpRuntimeArn: mcpRuntimeStack.pricingMcpRuntimeArn,
   billingMcpRuntimeEndpoint: mcpRuntimeStack.billingMcpRuntimeEndpoint,
   pricingMcpRuntimeEndpoint: mcpRuntimeStack.pricingMcpRuntimeEndpoint,
+  dataProcessingMcpRuntimeArn: mcpRuntimeStack.dataProcessingMcpRuntimeArn,
+  dataProcessingMcpRuntimeEndpoint: mcpRuntimeStack.dataProcessingMcpRuntimeEndpoint,
   // AuthStack Cognito for outbound OAuth to runtimes
   authUserPoolId: authStack.userPoolId,
   authUserPoolArn: authStack.userPoolArn,

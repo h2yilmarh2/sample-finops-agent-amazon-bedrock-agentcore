@@ -26,6 +26,7 @@ export class ImageStack extends cdk.Stack {
   public readonly repository: ecr.Repository;
   public readonly billingMcpRepository: ecr.Repository;
   public readonly pricingMcpRepository: ecr.Repository;
+  public readonly dataProcessingMcpRepository: ecr.Repository;
   public readonly sourceBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -52,6 +53,15 @@ export class ImageStack extends cdk.Stack {
     // ECR Repository for Pricing MCP Server Runtime
     this.pricingMcpRepository = new ecr.Repository(this, 'PricingMcpRepository', {
       repositoryName: 'finops-pricing-mcp-runtime',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      emptyOnDelete: true,
+      imageScanOnPush: true,
+      lifecycleRules: [{ description: 'Keep last 10 images', maxImageCount: 10 }],
+    });
+
+    // ECR Repository for Data Processing MCP Server Runtime
+    this.dataProcessingMcpRepository = new ecr.Repository(this, 'DataProcessingMcpRepository', {
+      repositoryName: 'finops-dataprocessing-mcp-runtime',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       emptyOnDelete: true,
       imageScanOnPush: true,
@@ -196,6 +206,49 @@ export class ImageStack extends cdk.Stack {
     pricingBuildWaiter.node.addDependency(pricingBuildTrigger);
 
     // ========================================
+    // Data Processing MCP Server - CodeBuild + Transform
+    // ========================================
+    const dataProcessingBuildProject = this.createTransformBuildProject(
+      'DataProcessingMcp',
+      this.dataProcessingMcpRepository,
+      'codebuild-scripts/',
+      'buildspec-dataprocessing.yml',
+    );
+    dataProcessingBuildProject.node.addDependency(scriptsDeployment);
+
+    // Grant Lambda permissions for data processing
+    buildTriggerFn.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['codebuild:StartBuild'],
+      resources: [dataProcessingBuildProject.projectArn],
+    }));
+    buildWaiterFn.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['codebuild:BatchGetBuilds'],
+      resources: [dataProcessingBuildProject.projectArn],
+    }));
+
+    // Trigger data processing build
+    const dataProcessingBuildTrigger = new cdk.CustomResource(this, 'DataProcessingBuildTrigger', {
+      serviceToken: buildTriggerFn.functionArn,
+      properties: {
+        ProjectName: dataProcessingBuildProject.projectName,
+        Timestamp: new Date().toISOString(),
+      },
+    });
+    dataProcessingBuildTrigger.node.addDependency(scriptsDeployment);
+
+    // Wait for data processing build
+    const dataProcessingBuildWaiter = new cdk.CustomResource(this, 'DataProcessingBuildWaiter', {
+      serviceToken: buildWaiterFn.functionArn,
+      properties: {
+        BuildId: dataProcessingBuildTrigger.getAttString('BuildId'),
+        MaxWaitSeconds: '1200',
+      },
+    });
+    dataProcessingBuildWaiter.node.addDependency(dataProcessingBuildTrigger);
+
+    // ========================================
     // Main Agent Runtime - Standard Docker Build
     // ========================================
     this.buildMainRuntimeImage(agentcoreDeployment);
@@ -219,6 +272,12 @@ export class ImageStack extends cdk.Stack {
       value: this.pricingMcpRepository.repositoryUri,
       description: 'Pricing MCP Runtime ECR Repository URI',
       exportName: `${this.stackName}-PricingMcpRepositoryUri`,
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessingMcpRepositoryUri', {
+      value: this.dataProcessingMcpRepository.repositoryUri,
+      description: 'Data Processing MCP Runtime ECR Repository URI',
+      exportName: `${this.stackName}-DataProcessingMcpRepositoryUri`,
     });
 
     new cdk.CfnOutput(this, 'SourceBucketName', {
