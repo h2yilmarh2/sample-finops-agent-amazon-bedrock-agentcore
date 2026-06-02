@@ -30,6 +30,7 @@ else:
 
 # 2. Remove 'dependencies' kwarg from FastMCP constructor if present
 content = re.sub(r'\s*dependencies=\[.*?\],?\n?', '\n', content, flags=re.DOTALL)
+content = re.sub(r'\s*dependencies=[A-Za-z_][A-Za-z_0-9]*,?\n?', '\n', content)
 print('Removed dependencies kwarg if present')
 
 # 3. Replace main() function
@@ -52,6 +53,33 @@ patterns = [
 
 new_main = '''def main():
     \"\"\"Run the MCP server with streamable-http transport.\"\"\"
+    global mcp
+
+    # Enable write and sensitive data access for full FinOps functionality
+    allow_write = True
+    allow_sensitive_data_access = True
+
+    # Create the MCP server instance
+    mcp = create_server()
+
+    # Initialize all handlers
+    GlueDataCatalogHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    GlueInteractiveSessionsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    GlueWorkflowAndTriggerHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    GlueEtlJobsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    GlueCommonsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    AthenaQueryHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    AthenaDataCatalogHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    AthenaWorkGroupHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    CrawlerHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    EMREc2ClusterHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    EMREc2StepsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    EMREc2InstanceHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    EMRServerlessApplicationHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    EMRServerlessJobRunHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    CommonResourceHandler(mcp, allow_write=allow_write)
+
+    # Run with streamable-http transport
     mcp.run(transport='streamable-http', host='0.0.0.0', port=8000, stateless_http=True)'''
 
 patched = False
@@ -63,10 +91,10 @@ for old_main, _ in patterns:
         break
 
 if not patched:
-    # Fallback: regex replace any main() that ends with mcp.run()
+    # Fallback: regex replace the entire main() function (from def to return or end)
     content = re.sub(
-        r'def main\(\):.*?mcp\.run\(\)',
-        new_main,
+        r'def main\(\):.*?mcp\.run\(\).*?(?=\nif __name__|$)',
+        new_main + '\n',
         content,
         flags=re.DOTALL
     )
@@ -87,6 +115,38 @@ grep -q 'streamable-http' "$SERVER_FILE" || { echo "ERROR: streamable-http not f
 grep -q 'port=8000' "$SERVER_FILE" || { echo "ERROR: port=8000 not found in server.py"; exit 1; }
 echo "server.py transformation verified."
 
+# Patch Context import in ALL files to use fastmcp.Context (which is excluded from schema)
+# The upstream server imports from 'mcp.server.fastmcp' which doesn't auto-exclude ctx
+echo "Patching Context imports to use fastmcp package..."
+find . -name "*.py" -exec python3 -c "
+import sys, re
+
+filepath = sys.argv[1]
+with open(filepath, 'r') as f:
+    content = f.read()
+
+original = content
+
+# Replace 'from mcp.server.fastmcp import Context' with 'from fastmcp import Context'
+content = re.sub(
+    r'from mcp\.server\.fastmcp import Context',
+    'from fastmcp import Context',
+    content
+)
+# Also handle 'from mcp.server.fastmcp import FastMCP, Context' etc
+content = re.sub(
+    r'from mcp\.server\.fastmcp import (.+)',
+    lambda m: 'from fastmcp import ' + m.group(1),
+    content
+)
+
+if content != original:
+    with open(filepath, 'w') as f:
+        f.write(content)
+    print(f'  Patched imports: {filepath}')
+" {} \;
+echo "Context import patching complete."
+
 # Add fastmcp dependency if needed
 if grep -q 'fastmcp' pyproject.toml; then
     echo "fastmcp already in pyproject.toml"
@@ -98,7 +158,7 @@ with open('pyproject.toml', 'r') as f:
     content = f.read()
 content = re.sub(
     r'(dependencies\s*=\s*\[)',
-    r'\1\n    \"fastmcp>=2.0.0,<3.0.0\",',
+    r'\1\n    \"fastmcp>=3.0.0\",',
     content,
     count=1
 )

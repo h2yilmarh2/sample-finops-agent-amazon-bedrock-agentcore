@@ -7,16 +7,17 @@ import { NagSuppressions } from 'cdk-nag';
 export interface MCPRuntimeStackProps extends cdk.StackProps {
   billingMcpRepository: ecr.IRepository;
   pricingMcpRepository: ecr.IRepository;
-  dataProcessingMcpRepository: ecr.IRepository;
+  dataProcessingMcpRepository?: ecr.IRepository;
   // From AuthStack - for JWT authorization on runtimes
   userPoolId: string;
   m2mClientId: string;
-  // Data Processing MCP configuration
-  athenaDatabase: string;
-  athenaTable: string;
-  athenaOutputBucket: string;
-  curS3Bucket: string;
-  curS3Prefix: string;
+  // Data Processing MCP configuration (optional)
+  athenaDatabase?: string;
+  athenaTable?: string;
+  athenaOutputBucket?: string;
+  curS3Bucket?: string;
+  curS3Prefix?: string;
+  athenaWorkgroup?: string;
 }
 
 export class MCPRuntimeStack extends cdk.Stack {
@@ -24,11 +25,13 @@ export class MCPRuntimeStack extends cdk.Stack {
   public readonly pricingMcpRuntimeArn: string;
   public readonly billingMcpRuntimeEndpoint: string;
   public readonly pricingMcpRuntimeEndpoint: string;
-  public readonly dataProcessingMcpRuntimeArn: string;
-  public readonly dataProcessingMcpRuntimeEndpoint: string;
+  public readonly dataProcessingMcpRuntimeArn?: string;
+  public readonly dataProcessingMcpRuntimeEndpoint?: string;
 
   constructor(scope: Construct, id: string, props: MCPRuntimeStackProps) {
     super(scope, id, props);
+
+    const enableDataProcessing = !!(props.dataProcessingMcpRepository && props.athenaDatabase && props.athenaTable && props.athenaOutputBucket && props.curS3Bucket);
 
     // ========================================
     // IAM Roles for MCP Runtimes
@@ -241,125 +244,180 @@ export class MCPRuntimeStack extends cdk.Stack {
     this.pricingMcpRuntimeEndpoint = `https://bedrock-agentcore.${this.region}.amazonaws.com/runtimes/${encodedPricingArn}/invocations?qualifier=DEFAULT`;
 
     // ========================================
-    // Data Processing MCP Server Runtime
+    // Data Processing MCP Server Runtime (conditional)
     // ========================================
 
-    const dataProcessingMcpRuntimeRole = new iam.Role(this, 'DataProcessingMcpRuntimeRole', {
-      roleName: `${this.stackName}-DataProcessingMcpRuntimeRole`,
-      assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
-    });
+    if (enableDataProcessing) {
+      const dataProcessingMcpRuntimeRole = new iam.Role(this, 'DataProcessingMcpRuntimeRole', {
+        roleName: `${this.stackName}-DataProcessingMcpRuntimeRole`,
+        assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
+      });
 
-    // Add common permissions
-    for (const stmt of commonRuntimePermissions) {
-      dataProcessingMcpRuntimeRole.addToPolicy(stmt);
-    }
-    props.dataProcessingMcpRepository.grantPull(dataProcessingMcpRuntimeRole);
-
-    // Athena permissions
-    dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'athena:StartQueryExecution',
-        'athena:GetQueryExecution',
-        'athena:GetQueryResults',
-        'athena:StopQueryExecution',
-        'athena:ListQueryExecutions',
-        'athena:GetWorkGroup',
-        'athena:ListWorkGroups',
-        'athena:ListNamedQueries',
-        'athena:GetNamedQuery',
-        'athena:ListDatabases',
-        'athena:ListTableMetadata',
-        'athena:GetTableMetadata',
-        'athena:GetDatabase',
-      ],
-      resources: ['*'],
-    }));
-
-    // Glue Catalog permissions
-    dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'glue:GetDatabase',
-        'glue:GetDatabases',
-        'glue:GetTable',
-        'glue:GetTables',
-        'glue:GetPartition',
-        'glue:GetPartitions',
-        'glue:SearchTables',
-      ],
-      resources: ['*'],
-    }));
-
-    // S3 permissions for CUR bucket and Athena results
-    const s3Resources = ['arn:aws:s3:::*'];
-    const s3ObjectResources = ['arn:aws:s3:::*/*'];
-
-    dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:ListBucket',
-        's3:GetBucketLocation',
-        's3:PutObject',
-      ],
-      resources: [...s3Resources, ...s3ObjectResources],
-    }));
-
-    // Environment variables for the runtime
-    const dataProcessingEnvVars: { [key: string]: string } = {
-      AWS_REGION: this.region,
-      DEPLOYMENT_TIMESTAMP: new Date().toISOString(),
-      ATHENA_DATABASE: props.athenaDatabase,
-      ATHENA_TABLE: props.athenaTable,
-      ATHENA_OUTPUT_BUCKET: props.athenaOutputBucket,
-      CUR_S3_BUCKET: props.curS3Bucket,
-      CUR_S3_PREFIX: props.curS3Prefix,
-    };
-
-    const cfnDataProcessingMcpRuntime = new cdk.CfnResource(this, 'DataProcessingMcpRuntime', {
-      type: 'AWS::BedrockAgentCore::Runtime',
-      properties: {
-        AgentRuntimeName: 'finops_dataprocessing_mcp_jwt_v1',
-        Description: 'AWS Labs Data Processing MCP Server Runtime (Athena/Glue) with JWT authorization',
-        RoleArn: dataProcessingMcpRuntimeRole.roleArn,
-        AuthorizerConfiguration: {
-          CustomJWTAuthorizer: {
-            AllowedClients: [props.m2mClientId],
-            DiscoveryUrl: `https://cognito-idp.${this.region}.amazonaws.com/${props.userPoolId}/.well-known/openid-configuration`,
-          }
-        },
-        AgentRuntimeArtifact: {
-          ContainerConfiguration: {
-            ContainerUri: `${props.dataProcessingMcpRepository.repositoryUri}:latest`
-          }
-        },
-        NetworkConfiguration: {
-          NetworkMode: 'PUBLIC'
-        },
-        EnvironmentVariables: dataProcessingEnvVars,
-        ProtocolConfiguration: 'MCP',
-        LifecycleConfiguration: {},
+      // Add common permissions
+      for (const stmt of commonRuntimePermissions) {
+        dataProcessingMcpRuntimeRole.addToPolicy(stmt);
       }
-    });
+      props.dataProcessingMcpRepository!.grantPull(dataProcessingMcpRuntimeRole);
 
-    cfnDataProcessingMcpRuntime.node.addDependency(dataProcessingMcpRuntimeRole);
+      // Athena permissions — scoped to workgroup
+      const workgroup = props.athenaWorkgroup || 'primary';
 
-    this.dataProcessingMcpRuntimeArn = cfnDataProcessingMcpRuntime.getAtt('AgentRuntimeArn').toString();
-    const encodedDataProcessingArn = cdk.Fn.join('', [
-      cdk.Fn.select(0, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
-      '%3A',
-      cdk.Fn.select(1, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
-      '%3A',
-      cdk.Fn.select(2, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
-      '%3A',
-      cdk.Fn.select(3, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
-      '%3A',
-      cdk.Fn.select(4, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
-      '%3A',
-      cdk.Fn.join('%2F', cdk.Fn.split('/', cdk.Fn.select(5, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)))),
-    ]);
-    this.dataProcessingMcpRuntimeEndpoint = `https://bedrock-agentcore.${this.region}.amazonaws.com/runtimes/${encodedDataProcessingArn}/invocations?qualifier=DEFAULT`;
+      dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'athena:StartQueryExecution',
+          'athena:GetQueryExecution',
+          'athena:GetQueryResults',
+          'athena:StopQueryExecution',
+          'athena:ListQueryExecutions',
+          'athena:GetWorkGroup',
+          'athena:ListNamedQueries',
+          'athena:GetNamedQuery',
+        ],
+        resources: [
+          `arn:aws:athena:${this.region}:${this.account}:workgroup/${workgroup}`,
+        ],
+      }));
+
+      // Athena catalog-level permissions (list/describe — require wildcard)
+      dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'athena:ListWorkGroups',
+          'athena:ListDatabases',
+          'athena:ListTableMetadata',
+          'athena:GetTableMetadata',
+          'athena:GetDatabase',
+        ],
+        resources: [
+          `arn:aws:athena:${this.region}:${this.account}:datacatalog/*`,
+        ],
+      }));
+
+      // Glue Catalog permissions — scoped to specific database and table
+      dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'glue:GetDatabase',
+          'glue:GetDatabases',
+          'glue:GetTable',
+          'glue:GetTables',
+          'glue:GetPartition',
+          'glue:GetPartitions',
+          'glue:SearchTables',
+        ],
+        resources: [
+          `arn:aws:glue:${this.region}:${this.account}:catalog`,
+          `arn:aws:glue:${this.region}:${this.account}:database/${props.athenaDatabase}`,
+          `arn:aws:glue:${this.region}:${this.account}:table/${props.athenaDatabase}/${props.athenaTable}`,
+          `arn:aws:glue:${this.region}:${this.account}:table/${props.athenaDatabase}/*`,
+        ],
+      }));
+
+      // S3 permissions — scoped to CUR bucket and Athena output bucket only
+      const athenaOutputBucketName = props.athenaOutputBucket!;
+      const curBucketName = props.curS3Bucket!;
+
+      dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:ListBucket',
+          's3:GetBucketLocation',
+        ],
+        resources: [
+          `arn:aws:s3:::${curBucketName}`,
+          `arn:aws:s3:::${curBucketName}/*`,
+        ],
+      }));
+
+      dataProcessingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:PutObject',
+          's3:ListBucket',
+          's3:GetBucketLocation',
+        ],
+        resources: [
+          `arn:aws:s3:::${athenaOutputBucketName}`,
+          `arn:aws:s3:::${athenaOutputBucketName}/*`,
+        ],
+      }));
+
+      // Environment variables for the runtime
+      // Note: ATHENA_OUTPUT_BUCKET is NOT passed to the runtime because the
+      // aws-dataprocessing-mcp-server does not use it. The output location is
+      // determined by the Athena workgroup configuration or passed as a parameter
+      // by the LLM when calling start-query-execution.
+      const dataProcessingEnvVars: { [key: string]: string } = {
+        AWS_REGION: this.region,
+        DEPLOYMENT_TIMESTAMP: new Date().toISOString(),
+      };
+
+      const cfnDataProcessingMcpRuntime = new cdk.CfnResource(this, 'DataProcessingMcpRuntime', {
+        type: 'AWS::BedrockAgentCore::Runtime',
+        properties: {
+          AgentRuntimeName: 'finops_dataprocessing_mcp_jwt_v1',
+          Description: 'AWS Labs Data Processing MCP Server Runtime (Athena/Glue) with JWT authorization',
+          RoleArn: dataProcessingMcpRuntimeRole.roleArn,
+          AuthorizerConfiguration: {
+            CustomJWTAuthorizer: {
+              AllowedClients: [props.m2mClientId],
+              DiscoveryUrl: `https://cognito-idp.${this.region}.amazonaws.com/${props.userPoolId}/.well-known/openid-configuration`,
+            }
+          },
+          AgentRuntimeArtifact: {
+            ContainerConfiguration: {
+              ContainerUri: `${props.dataProcessingMcpRepository!.repositoryUri}:latest`
+            }
+          },
+          NetworkConfiguration: {
+            NetworkMode: 'PUBLIC'
+          },
+          EnvironmentVariables: dataProcessingEnvVars,
+          ProtocolConfiguration: 'MCP',
+          LifecycleConfiguration: {},
+        }
+      });
+
+      cfnDataProcessingMcpRuntime.node.addDependency(dataProcessingMcpRuntimeRole);
+
+      this.dataProcessingMcpRuntimeArn = cfnDataProcessingMcpRuntime.getAtt('AgentRuntimeArn').toString();
+      const encodedDataProcessingArn = cdk.Fn.join('', [
+        cdk.Fn.select(0, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
+        '%3A',
+        cdk.Fn.select(1, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
+        '%3A',
+        cdk.Fn.select(2, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
+        '%3A',
+        cdk.Fn.select(3, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
+        '%3A',
+        cdk.Fn.select(4, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)),
+        '%3A',
+        cdk.Fn.join('%2F', cdk.Fn.split('/', cdk.Fn.select(5, cdk.Fn.split(':', this.dataProcessingMcpRuntimeArn)))),
+      ]);
+      this.dataProcessingMcpRuntimeEndpoint = `https://bedrock-agentcore.${this.region}.amazonaws.com/runtimes/${encodedDataProcessingArn}/invocations?qualifier=DEFAULT`;
+
+      new cdk.CfnOutput(this, 'DataProcessingMcpRuntimeArn', {
+        value: this.dataProcessingMcpRuntimeArn,
+        description: 'Data Processing MCP Server Runtime ARN',
+        exportName: `${this.stackName}-DataProcessingMcpRuntimeArn`,
+      });
+
+      new cdk.CfnOutput(this, 'DataProcessingMcpRuntimeEndpoint', {
+        value: this.dataProcessingMcpRuntimeEndpoint,
+        description: 'Data Processing MCP Server Runtime Endpoint',
+        exportName: `${this.stackName}-DataProcessingMcpRuntimeEndpoint`,
+      });
+
+      NagSuppressions.addResourceSuppressions(dataProcessingMcpRuntimeRole, [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Wildcard on Athena datacatalog ARN required for listing databases/tables. Workgroup, S3, and Glue are scoped to specific resources.',
+        },
+      ], true);
+    }
 
     // ========================================
     // Outputs
@@ -389,18 +447,6 @@ export class MCPRuntimeStack extends cdk.Stack {
       exportName: `${this.stackName}-PricingMcpRuntimeEndpoint`,
     });
 
-    new cdk.CfnOutput(this, 'DataProcessingMcpRuntimeArn', {
-      value: this.dataProcessingMcpRuntimeArn,
-      description: 'Data Processing MCP Server Runtime ARN',
-      exportName: `${this.stackName}-DataProcessingMcpRuntimeArn`,
-    });
-
-    new cdk.CfnOutput(this, 'DataProcessingMcpRuntimeEndpoint', {
-      value: this.dataProcessingMcpRuntimeEndpoint,
-      description: 'Data Processing MCP Server Runtime Endpoint',
-      exportName: `${this.stackName}-DataProcessingMcpRuntimeEndpoint`,
-    });
-
     // ========================================
     // CDK-Nag Suppressions
     // ========================================
@@ -416,13 +462,6 @@ export class MCPRuntimeStack extends cdk.Stack {
       {
         id: 'AwsSolutions-IAM5',
         reason: 'Wildcard permissions required for AWS Pricing API (global service), ECR auth token, CloudWatch, X-Ray',
-      },
-    ], true);
-
-    NagSuppressions.addResourceSuppressions(dataProcessingMcpRuntimeRole, [
-      {
-        id: 'AwsSolutions-IAM5',
-        reason: 'Wildcard permissions required for Athena, Glue Catalog, S3 (CUR data + query results), ECR auth token, CloudWatch',
       },
     ], true);
 

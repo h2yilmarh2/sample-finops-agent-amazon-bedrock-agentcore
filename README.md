@@ -85,10 +85,10 @@ These deployment instructions are optimized to best work on **Amazon Linux 2023*
   - Amazon CloudWatch Logs
   - AWS Secrets Manager
 - [AWS CLI](https://aws.amazon.com/cli/) v2.x installed and configured with credentials
-- [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting-started.html) v2.x installed globally:
+- [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting-started.html) v2.1125.0 or later installed globally:
 
   ```bash
-  npm install -g aws-cdk
+  npm install -g aws-cdk@latest
   ```
 
 ### AWS CDK bootstrap

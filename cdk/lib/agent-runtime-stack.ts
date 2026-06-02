@@ -13,6 +13,10 @@ export interface AgentRuntimeStackProps extends cdk.StackProps {
   userPoolId: string;
   userPoolClientId: string;
   identityPoolId: string;
+  // CUR configuration for system prompt (optional)
+  curDatabase?: string;
+  curTable?: string;
+  curWorkgroup?: string;
 }
 
 export class AgentRuntimeStack extends cdk.Stack {
@@ -137,6 +141,9 @@ export class AgentRuntimeStack extends cdk.Stack {
         GATEWAY_ARN: props.gatewayArn,
         DEPLOYMENT_TIMESTAMP: new Date().toISOString(),
         FORCE_REBUILD: `${Date.now()}`,
+        ...(props.curDatabase && { CUR_DATABASE: props.curDatabase }),
+        ...(props.curTable && { CUR_TABLE: props.curTable }),
+        ...(props.curWorkgroup && { CUR_WORKGROUP: props.curWorkgroup }),
       },
     });
 

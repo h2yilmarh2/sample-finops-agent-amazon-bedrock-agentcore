@@ -108,10 +108,22 @@ def initialize_agent_with_gateway():
         # Start the MCP client connection
         mcp_client.__enter__()
         
-        # Get tools from Gateway
-        logger.info("📋 Listing tools from Gateway...")
-        mcp_tools = mcp_client.list_tools_sync()
-        logger.info(f"✅ Retrieved {len(mcp_tools)} tools from Gateway")
+        # Get ALL tools from Gateway with pagination
+        # The Gateway paginates tools/list responses and Strands MCPClient.list_tools_sync()
+        # only fetches one page. We iterate until there's no nextCursor.
+        logger.info("📋 Listing tools from Gateway (with pagination)...")
+        mcp_tools = []
+        pagination_token = None
+        page = 0
+        while True:
+            page += 1
+            page_tools = mcp_client.list_tools_sync(pagination_token=pagination_token)
+            mcp_tools.extend(page_tools)
+            pagination_token = getattr(page_tools, 'pagination_token', None)
+            logger.info(f"  Page {page}: {len(page_tools)} tools (more: {bool(pagination_token)})")
+            if not pagination_token:
+                break
+        logger.info(f"✅ Retrieved {len(mcp_tools)} total tools from Gateway")
         
         # Get current date for system prompt
         current_date = get_current_date_utc()
@@ -129,11 +141,25 @@ You have access to tools for:
 - Optimization: Get recommendations for compute optimization, rightsizing, and savings plans
 - Free Tier: Monitor AWS Free Tier usage
 - Pricing: Look up AWS service pricing, compare instance costs, get pricing details
+- Resource-Level Cost Queries (CUR via Athena): Execute SQL queries against the AWS Cost and Usage Report to get per-resource cost breakdowns, user-level costs, and ARN-level visibility
 
 When a user asks about costs or pricing:
 1. Use the appropriate tools to gather the information
 2. Provide clear, actionable recommendations
 3. Always mention specific time periods, services, or resources in your responses
+
+When a user asks about specific resources, users, or ARN-level cost details:
+- Use the Data Processing MCP tools (prefixed with "dataProcessingMcp__") to query CUR data via Athena
+- The CUR database is: {os.environ.get('CUR_DATABASE', 'unknown')}
+- The CUR table is: {os.environ.get('CUR_TABLE', 'unknown')}
+- The Athena workgroup is: {os.environ.get('CUR_WORKGROUP', 'primary')}
+- IMPORTANT: When calling dataProcessingMcp tools, always pass the required parameters only (operation, query_string, etc). The tools work correctly in this environment.
+- First call dataProcessingMcp__manage_aws_athena_databases_and_tables with operation "get-table-metadata" to discover the CUR table schema
+- Then use dataProcessingMcp__manage_aws_athena_query_executions with operation "start-query-execution" to run SQL queries
+- Key CUR columns: line_item_resource_id (contains ARNs/user IDs), line_item_product_code, line_item_usage_type, line_item_unblended_cost, product_product_name
+- Example: To find QuickSight users and their costs, query WHERE line_item_product_code = 'AmazonQuickSight' AND line_item_resource_id != '' GROUP BY line_item_resource_id
+- Always include a time filter using billing_period or year/month partition columns
+- After starting a query, check its status with "get-query-execution", then retrieve results with "get-query-results"
 
 When using the AWS Pricing tools:
 - IMPORTANT: Always use tools prefixed with "pricingMcp__" for pricing lookups (e.g., pricingMcp__get_products, pricingMcp__get_pricing_service_codes). Do NOT use billingMcp__ tools for pricing queries.
