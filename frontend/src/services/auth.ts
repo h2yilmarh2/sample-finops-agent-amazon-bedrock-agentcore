@@ -4,7 +4,7 @@ import {
   AuthenticationDetails,
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
-import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import type { AppSettings, AuthState } from '../types';
 
 let currentSession: CognitoUserSession | null = null;

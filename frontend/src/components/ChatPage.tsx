@@ -16,8 +16,10 @@ interface ChatPageProps {
 export default function ChatPage({ settings, onSettingsChange, onLogout }: ChatPageProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
+
+  const isLoading = activeSession ? loadingSessions.has(activeSession.id) : false;
 
   const loadSessions = useCallback(() => {
     const allSessions = getSessions();
@@ -68,7 +70,8 @@ export default function ChatPage({ settings, onSettingsChange, onLogout }: ChatP
     }
 
     // Call agent
-    setLoading(true);
+    const sessionId = activeSession.id;
+    setLoadingSessions((prev) => new Set(prev).add(sessionId));
     try {
       const response = await invokeAgent(
         content,
@@ -86,7 +89,7 @@ export default function ChatPage({ settings, onSettingsChange, onLogout }: ChatP
 
       const finalSession = addMessageToSession(activeSession.id, agentMessage);
       if (finalSession) {
-        setActiveSession({ ...finalSession });
+        setActiveSession((current) => current?.id === sessionId ? { ...finalSession } : current);
         setSessions(getSessions());
       }
     } catch (err: unknown) {
@@ -100,11 +103,15 @@ export default function ChatPage({ settings, onSettingsChange, onLogout }: ChatP
 
       const finalSession = addMessageToSession(activeSession.id, errorMessage);
       if (finalSession) {
-        setActiveSession({ ...finalSession });
+        setActiveSession((current) => current?.id === sessionId ? { ...finalSession } : current);
         setSessions(getSessions());
       }
     } finally {
-      setLoading(false);
+      setLoadingSessions((prev) => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
     }
   };
 
@@ -162,7 +169,7 @@ export default function ChatPage({ settings, onSettingsChange, onLogout }: ChatP
           {activeSession ? (
             <ChatWindow
               messages={activeSession.messages}
-              loading={loading}
+              loading={isLoading}
               onSendMessage={handleSendMessage}
             />
           ) : (

@@ -8,6 +8,56 @@ interface ChatWindowProps {
   onSendMessage: (content: string) => void;
 }
 
+function ThinkingIndicator() {
+  const [elapsed, setElapsed] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  const tips = [
+    '🔍 Analyzing your request...',
+    '📊 Querying AWS services...',
+    '🧮 Crunching the numbers...',
+    '💡 Preparing insights...',
+    '🔗 Connecting to tools...',
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const tipTimer = setInterval(() => setTipIndex((i) => (i + 1) % tips.length), 4000);
+    return () => clearInterval(tipTimer);
+  }, [tips.length]);
+
+  const formatTime = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  };
+
+  return (
+    <div className="flex justify-start mb-4">
+      <div className="bg-gradient-to-r from-gray-700 to-gray-750 rounded-2xl rounded-bl-md px-5 py-4 border border-gray-600 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="relative w-8 h-8">
+            <div className="absolute inset-0 rounded-full border-2 border-purple-500/30" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-purple-400 animate-spin" />
+            <div className="absolute inset-2 rounded-full bg-purple-500/20 animate-pulse" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-gray-200 text-sm font-medium transition-all duration-500">
+              {tips[tipIndex]}
+            </span>
+            <span className="text-purple-400 text-xs font-mono mt-0.5">
+              ⏱️ {formatTime(elapsed)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatWindow({ messages, loading, onSendMessage }: ChatWindowProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -66,20 +116,7 @@ export default function ChatWindow({ messages, loading, onSendMessage }: ChatWin
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {loading && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-gray-400 text-sm ml-2">Thinking...</span>
-                  </div>
-                </div>
-              </div>
-            )}
+            {loading && <ThinkingIndicator />}
             <div ref={messagesEndRef} />
           </div>
         )}
