@@ -153,6 +153,21 @@ Set your email address to receive the temporary admin password for Amazon Cognit
 export ADMIN_EMAIL="your-email@example.com"
 ```
 
+**(Optional) Enable resource-level cost queries via Athena/CUR:**
+
+If you have AWS Cost and Usage Reports (CUR) configured with an Athena table, set these additional variables to enable the Data Processing MCP server:
+
+```bash
+export ATHENA_DATABASE="your-cur-database-name"
+export ATHENA_TABLE="your-cur-table-name"
+export ATHENA_OUTPUT_BUCKET="your-athena-results-bucket"
+export CUR_S3_BUCKET="your-cur-s3-bucket-name"
+export CUR_S3_PREFIX=""  # optional, leave empty if no prefix
+export ATHENA_WORKGROUP="primary"  # optional, defaults to 'primary'
+```
+
+If these variables are not set, the agent deploys with Billing + Pricing tools only (no Athena/CUR). See [DATA_PROCESSING_MCP.md](DATA_PROCESSING_MCP.md) for full details.
+
 ### Step 3: Install CDK dependencies
 
 ```bash
