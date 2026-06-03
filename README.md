@@ -201,11 +201,37 @@ You receive an email at the address you specified with a temporary password for 
 
 ### Step 8: Deploy the Amplify frontend
 
-1. Download `AWS-Amplify-Frontend.zip` from the `amplify-frontend/` directory in this repository.
-2. Open the [AWS Amplify console](https://console.aws.amazon.com/amplify/).
-3. Choose **Deploy without Git provider**.
-4. Upload the `.zip` file and wait for deployment to complete.
-5. Note the generated domain URL.
+The frontend source code is in the `frontend/` directory. You can deploy it to AWS Amplify connected to your Git repository:
+
+1. Open the [AWS Amplify console](https://console.aws.amazon.com/amplify/).
+2. Choose **Create new app** → Connect to **GitHub**.
+3. Select your repository and branch.
+4. Set the **Monorepo root directory** to `frontend`.
+5. Amplify will auto-detect the build settings (or use):
+   - Build command: `npm ci && npm run build`
+   - Output directory: `dist`
+6. Deploy and note the generated domain URL.
+
+Alternatively, deploy manually:
+
+```bash
+cd frontend
+npm ci
+npm run build
+# Upload the contents of frontend/dist/ as a zip to Amplify (Deploy without Git)
+```
+
+### Step 9: Configure the frontend
+
+On first login, open Settings (⚙️ icon) and enter the values from Step 7:
+
+- **User Pool ID**
+- **User Pool Client ID**
+- **Identity Pool ID**
+- **AgentCore ARN**
+- **Region** (default: `us-east-1`)
+
+Sign in with username `admin` and the temporary password sent to your email.
 
 ## Deployment Validation
 
@@ -240,18 +266,19 @@ You receive an email at the address you specified with a temporary password for 
 
 ### Configure the frontend
 
-Open the Amplify application URL. Enter the Amazon Cognito and AgentCore configuration values from the stack outputs:
+Open the Amplify application URL. Click the Settings icon (⚙️) and enter the Amazon Cognito and AgentCore configuration values from the stack outputs:
 
 - **User Pool ID**
 - **User Pool Client ID**
 - **Identity Pool ID**
 - **AgentCore ARN**
-
-From the **Agent Type** menu, select **AgentCore Agent**, enter the deployment Region (`us-east-1`), and choose an agent name. Save the configuration.
+- **Region** (default: `us-east-1`)
 
 ### Sign in and interact
 
 Sign in with the username `admin` and the temporary password sent to your email. Reset your password at first sign-in.
+
+The frontend includes a **session history panel** on the left side that shows your last 10 conversations. Click any session to resume it.
 
 **Sample queries to try:**
 
@@ -262,6 +289,7 @@ Sign in with the username `admin` and the temporary password sent to your email.
 | "Show me my costs by Region for the last 30 days" | `get_cost_and_usage` |
 | "What's my cost forecast for the next 3 months?" | `get_cost_forecast` |
 | "Compare pricing for t3.micro and t3.small instances" | `get_pricing` |
+| "Show me top resources by cost in June 2024 (via CUR)" | `manage_aws_athena_query_executions` |
 | "Are there any cost anomalies in my account?" | `get_anomalies` |
 | "What's my free tier usage status?" | `get_free_tier_usage` |
 | "Show me my budgets and their current status" | `describe_budgets` |

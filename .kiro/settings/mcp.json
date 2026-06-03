@@ -9,7 +9,6 @@
       ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_PROFILE": "AWSAdministratorAccess-713184952663",
         "AWS_REGION": "us-east-1"
       },
       "disabled": false,
