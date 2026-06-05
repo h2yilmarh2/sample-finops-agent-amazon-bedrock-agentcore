@@ -153,10 +153,6 @@ export class AuthStack extends cdk.Stack {
           clientId: userPoolClient.userPoolClientId,
           providerName: userPool.userPoolProviderName,
         },
-        {
-          clientId: m2mClient.userPoolClientId,
-          providerName: userPool.userPoolProviderName,
-        },
       ],
     });
 
@@ -193,8 +189,6 @@ export class AuthStack extends cdk.Stack {
         'bedrock-agentcore:ListRuntimes',
       ],
       resources: [
-        `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/finops_billing_mcp*`,
-        `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/finops_pricing_mcp*`,
         `arn:aws:bedrock-agentcore:${this.region}:${this.account}:runtime/finops_runtime*`,
       ],
     }));

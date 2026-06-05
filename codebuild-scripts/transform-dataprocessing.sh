@@ -55,29 +55,18 @@ new_main = '''def main():
     \"\"\"Run the MCP server with streamable-http transport.\"\"\"
     global mcp
 
-    # Enable write and sensitive data access for full FinOps functionality
-    allow_write = True
+    # Read-only mode: only enable handlers needed for CUR queries
+    allow_write = False
     allow_sensitive_data_access = True
 
     # Create the MCP server instance
     mcp = create_server()
 
-    # Initialize all handlers
-    GlueDataCatalogHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    GlueInteractiveSessionsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    GlueWorkflowAndTriggerHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    GlueEtlJobsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    GlueCommonsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
+    # Initialize only Athena and Glue Data Catalog handlers (CUR queries)
     AthenaQueryHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
     AthenaDataCatalogHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
     AthenaWorkGroupHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    CrawlerHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    EMREc2ClusterHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    EMREc2StepsHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    EMREc2InstanceHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    EMRServerlessApplicationHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    EMRServerlessJobRunHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
-    CommonResourceHandler(mcp, allow_write=allow_write)
+    GlueDataCatalogHandler(mcp, allow_write=allow_write, allow_sensitive_data_access=allow_sensitive_data_access)
 
     # Run with streamable-http transport
     mcp.run(transport='streamable-http', host='0.0.0.0', port=8000, stateless_http=True)'''

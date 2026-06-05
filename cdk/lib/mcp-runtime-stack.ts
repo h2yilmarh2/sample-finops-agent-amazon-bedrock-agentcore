@@ -93,20 +93,63 @@ export class MCPRuntimeStack extends cdk.Stack {
     props.billingMcpRepository.grantPull(billingMcpRuntimeRole);
     props.pricingMcpRepository.grantPull(pricingMcpRuntimeRole);
 
-    // Add Cost Explorer and billing permissions to Billing MCP Runtime
+    // Add Cost Explorer and billing permissions to Billing MCP Runtime (read-only)
     billingMcpRuntimeRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
-        'ce:*',
-        'budgets:*',
-        'compute-optimizer:*',
-        'freetier:*',
-        'cost-optimization-hub:*',
+        // Cost Explorer - read only
+        'ce:GetCostAndUsage',
+        'ce:GetCostAndUsageWithResources',
+        'ce:GetCostForecast',
+        'ce:GetUsageForecast',
+        'ce:GetDimensionValues',
+        'ce:GetTags',
+        'ce:GetCostCategories',
+        'ce:GetAnomalies',
+        'ce:GetAnomalyMonitors',
+        'ce:GetAnomalySubscriptions',
+        'ce:GetSavingsPlansCoverage',
+        'ce:GetSavingsPlansUtilization',
+        'ce:GetSavingsPlansUtilizationDetails',
+        'ce:GetSavingsPlansPurchaseRecommendation',
+        'ce:GetReservationCoverage',
+        'ce:GetReservationUtilization',
+        'ce:GetReservationPurchaseRecommendation',
+        'ce:GetRightsizingRecommendation',
+        'ce:ListCostAllocationTags',
+        'ce:ListCostAllocationTagBackfillHistory',
+        'ce:ListCostCategoryDefinitions',
+        'ce:DescribeCostCategoryDefinition',
+        'ce:GetCostAndUsageComparisons',
+        'ce:GetCostComparisonDrivers',
+        // Budgets - read only
+        'budgets:ViewBudget',
+        'budgets:DescribeBudgets',
+        'budgets:DescribeBudget',
+        'budgets:DescribeBudgetPerformanceHistory',
+        // Compute Optimizer - read only
+        'compute-optimizer:GetEnrollmentStatus',
+        'compute-optimizer:GetRecommendationSummaries',
+        'compute-optimizer:GetEC2InstanceRecommendations',
+        'compute-optimizer:GetAutoScalingGroupRecommendations',
+        'compute-optimizer:GetEBSVolumeRecommendations',
+        'compute-optimizer:GetLambdaFunctionRecommendations',
+        'compute-optimizer:GetECSServiceRecommendations',
+        'compute-optimizer:GetRDSRecommendations',
+        // Free Tier - read only
+        'freetier:GetFreeTierUsage',
+        // Cost Optimization Hub - read only
+        'cost-optimization-hub:ListRecommendations',
+        'cost-optimization-hub:ListRecommendationSummaries',
+        'cost-optimization-hub:GetRecommendation',
+        'cost-optimization-hub:GetPreferences',
+        // Pricing - read only
         'pricing:GetProducts',
         'pricing:GetAttributeValues',
         'pricing:DescribeServices',
         'pricing:ListPriceListFiles',
         'pricing:GetPriceListFileUrl',
+        // EC2/ASG/Lambda/ECS metadata - read only
         'ec2:DescribeInstances',
         'ec2:DescribeVolumes',
         'ec2:DescribeInstanceTypes',

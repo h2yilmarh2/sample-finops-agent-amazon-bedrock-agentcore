@@ -52,31 +52,12 @@ export class AgentCoreGatewayStack extends cdk.Stack {
     const m2mClientSecret = describeM2MClient.getResponseField('UserPoolClient.ClientSecret');
 
     // ========================================
-    // Gateway Token Exchange Policy (managed policy, wildcard)
-    // ========================================
-
-    const tokenExchangePolicy = new iam.ManagedPolicy(this, 'GatewayTokenExchangePolicy', {
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'AgentCoreIdentityTokenExchange',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'bedrock-agentcore:GetWorkloadAccessToken',
-            'bedrock-agentcore:GetResourceOauth2Token',
-          ],
-          resources: ['*'],
-        }),
-      ],
-    });
-
-    // ========================================
     // Gateway Service Role
     // ========================================
 
     const gatewayRole = new iam.Role(this, 'GatewayServiceRole', {
       description: 'Service role for FinOps AgentCore Gateway',
       assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
-      managedPolicies: [tokenExchangePolicy],
     });
 
     // ========================================
